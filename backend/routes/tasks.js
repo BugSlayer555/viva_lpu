@@ -1,53 +1,60 @@
 const express = require('express');
 const router = express.Router();
+const Task = require('../model/Task');
+const auth = require('../middleware/auth');
 
-// Example: Dummy data (real me DB use karoge)
-let tasks = [
-  { id: 1, title: 'First Task', completed: false },
-  { id: 2, title: 'Second Task', completed: true },
-];
-
-// 1. GET all tasks
-router.get('/', (req, res) => {
-  res.json(tasks);
-});
-
-// 2. POST new task
-router.post('/', (req, res) => {
-  const { title } = req.body;
-  if (!title) {
-    return res.status(400).json({ msg: 'Task title is required' });
+// GET all tasks for the authenticated user
+router.get('/', auth, async (req, res) => {
+  try {
+    const tasks = await Task.find({ user: req.user });
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
   }
-  const newTask = {
-    id: tasks.length + 1,
-    title,
-    completed: false,
-  };
-  tasks.push(newTask);
-  res.status(201).json(newTask);
 });
 
-// 3. PUT update task by id
-router.put('/:id', (req, res) => {
-  const taskId = parseInt(req.params.id);
-  const { title, completed } = req.body;
-
-  const task = tasks.find(t => t.id === taskId);
-  if (!task) {
-    return res.status(404).json({ msg: 'Task not found' });
+// POST new task for the authenticated user
+router.post('/', auth, async (req, res) => {
+  const { text } = req.body;
+  if (!text) {
+    return res.status(400).json({ msg: 'Task text is required' });
   }
-
-  if (title !== undefined) task.title = title;
-  if (completed !== undefined) task.completed = completed;
-
-  res.json(task);
+  try {
+    const newTask = new Task({ text, user: req.user });
+    await newTask.save();
+    res.status(201).json(newTask);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
 });
 
-// 4. DELETE task by id
-router.delete('/:id', (req, res) => {
-  const taskId = parseInt(req.params.id);
-  tasks = tasks.filter(t => t.id !== taskId);
-  res.json({ msg: 'Task deleted' });
+// PUT update task by id for the authenticated user
+router.put('/:id', auth, async (req, res) => {
+  const { text } = req.body;
+  try {
+    let task = await Task.findOne({ _id: req.params.id, user: req.user });
+    if (!task) {
+      return res.status(404).json({ msg: 'Task not found' });
+    }
+    if (text !== undefined) task.text = text;
+    await task.save();
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
+});
+
+// DELETE task by id for the authenticated user
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const task = await Task.findOneAndDelete({ _id: req.params.id, user: req.user });
+    if (!task) {
+      return res.status(404).json({ msg: 'Task not found' });
+    }
+    res.json({ msg: 'Task deleted' });
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
 });
 
 module.exports = router;
